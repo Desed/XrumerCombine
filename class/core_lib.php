@@ -239,9 +239,6 @@ function extract_title($html) {
 }
 
 
-SELECT * FROM `xrumer_db` where url_host is null
-
-
 function mysql_trash_badLinks() {
 	global $db;
 	$db->query("DELETE FROM `xrumer_db` where href_rel is null");
