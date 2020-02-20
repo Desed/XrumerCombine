@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once 'simple_html_dom_lib.php'; // библиотека для парсинга
 require_once 'xevil_captcha_lib.php'; // для решения капчи
 require_once 'safemysql.class.php'; // БД
@@ -7,14 +7,14 @@ include 'main_config.php'; // конфиг
 
 function multi_curl($data) {
 
-	global $threads, $threads_timeout;
+	global $threads, $threads_timeout, $limit_pageSize;
 	
 		$multi = curl_multi_init();
 		$channels = array();
 	
 		foreach ($data as &$data_url) {
-			
-		$url = $data_url['url'];
+				$url = $data_url['url'];	
+		if (domain_info($url)['domain_level'] < 3) {			
 		mysql_create_string($data_url);
 
 			$ch = curl_init();
@@ -25,8 +25,9 @@ function multi_curl($data) {
 			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 			curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 			curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $threads*($threads_timeout/1000)); 
-			curl_setopt($ch, CURLOPT_TIMEOUT_MS, $threads*$threads_timeout); //timeout in seconds
+			curl_setopt($ch, CURLOPT_MAXREDIRS, 10);	
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2000); 
+			curl_setopt($ch, CURLOPT_TIMEOUT_MS, $threads_timeout*$threads); //timeout in seconds		
 			curl_multi_add_handle($multi, $ch);
 			$channels[$url] = $ch;
 		}
@@ -49,15 +50,18 @@ function multi_curl($data) {
 
 		
 		foreach ($channels as $url => $channel) {
-		$html = new simple_html_dom();	//создаем объект
-		$out = curl_multi_getcontent($channel); //получаем контент
-		$html->load($out);	//помещаем наш контент
-		$result .= collection_html($html, $url);
+		if (curl_getinfo($channel)['size_download'] < $limit_pageSize) {
+			$html = new simple_html_dom();	//создаем объект
+			$out = curl_multi_getcontent($channel); //получаем контент
+			$html->load($out);	//помещаем наш контент
+			$result .= collection_html($html, $url);
+		}
 		curl_multi_remove_handle($multi, $channel); //кикаем поток
 		}
 		return $result;
 		unset($channel, $url);
-		curl_multi_close($multi);
+		curl_multi_close($multi);	
+}
 }
 
 
@@ -67,7 +71,7 @@ function collection_html($html, $url) {
 
 
 function link_processing($html, $url) {
-	
+	global $debug;
 	$hrefsRel = extract_hrefsRel($html, $url); // получаем массив с атрибутами ссылок
 		$rel_type = sorting_hrefArr_follow($hrefsRel);
 		
@@ -76,6 +80,7 @@ function link_processing($html, $url) {
 	$lang = extract_lang($html); // узнаем язык сайта
 	$title = extract_title($html); // получаем title страницы
 	$h1 = extract_h1($html); // получаем первый h1 страницы
+	$metaRobots = extract_metaRobots($html); // получаем первый h1 страницы
 	$domain_info = domain_info($url); // узнаем уровень домена
 
 			$global_array = [
@@ -83,13 +88,18 @@ function link_processing($html, $url) {
 								"url_host" => $domain_info['url_host'],
 								"domain_level" => $domain_info['domain_level'],
 								"lang" => $lang,
+								"robots" => $metaRobots,
 								"title" => $title,
 								"h1" => $h1,
 								"href_rel" => $rel_type
 								];
-			
+		if ($debug) {
+			print_r($global_array);
+		} else {
 			mysql_update_processing_data($global_array);
 			mysql_update_yaX();
+		}
+			
 
 }
 
@@ -97,13 +107,14 @@ function link_processing($html, $url) {
 function mysql_update_processing_data($global_array) {
 	global $db;
 	
-$db->query("UPDATE `xrumer_db` SET `url_host`=?s, `domain_level`=?i, `lang`=?s, `title`=?s, `h1`=?s, `href_rel`=?s WHERE (`url`=?s);",
+$db->query("UPDATE `xrumer_db` SET `url_host`=?s, `domain_level`=?i, `lang`=?s, `title`=?s, `h1`=?s, `href_rel`=?s, `robots`=?s WHERE (`url`=?s);",
 		$global_array['url_host'],
 		$global_array['domain_level'], 
 		$global_array['lang'],
 		$global_array['title'], 
 		$global_array['h1'],
 		$global_array['href_rel'],
+		$global_array['robots'],
 		$global_array['url']);
 		
 }
@@ -127,6 +138,9 @@ function mysql_update_yaX() {
 	
 	if ($get_list_db) {
 			$captcha_answer_arr = yandex_x_urls($get_list_db);
+			if ($captcha_answer_arr == null) {
+				$captcha_answer_arr = array();
+			}
 	
 		foreach ($captcha_answer_arr as $answer) {
 			$url = str_replace(array("https://yandex.ru/cycounter?", "&theme=light&lang=ru"), array("", ""), $answer['source']);
@@ -142,12 +156,22 @@ function mysql_update_yaX() {
 }
 
 function yandex_x_urls($array_url) {
+	
 	$yandex_img_array = [];
 	foreach ($array_url as $url) {
 		$yandex_img_array[] = "https://yandex.ru/cycounter?{$url}&theme=light&lang=ru";
 	}
-	return captcha_decision($yandex_img_array);
+	
+	for ($i = 1; ; $i++) {
+		$answer = captcha_decision($yandex_img_array);
+		if ($i > 10 && $answer == false ) {
+			break;
+		}
+    return $answer;
 }
+	
+}
+
 
 function domain_info($url) {
 	$url_host = parse_url($url, PHP_URL_HOST);
@@ -215,6 +239,18 @@ function extract_lang($html) {
 	
 	return $attr_lang;
 }
+
+function extract_metaRobots($html) {
+
+	$attr_lang = []; // создаем пустой массив который мы заполним нужными ссылками
+		foreach ($html->find('meta[name=robots]') as &$article) { // находим все ссылки на странице
+			$attr_lang[] = $article->content; //получаем атрибуты ссылок
+		}
+	
+	return $attr_lang['0'];
+}
+
+
 
 function extract_h1($html) {
 
@@ -298,7 +334,11 @@ $time = microtime(true) - $start;
 		}
 }
 
+if ($debug) {
+	threads_data(array(array('url' => 'http://mrez.ru/testtitle.html')));;
+} else {
 for ($i = 1; ; $i++) {
+	report_UrlSaveFile();
 	$report_file = xrumer_report_processing();
 	if ($report_file) {
 	$count_new = count($report_file);
@@ -310,7 +350,7 @@ for ($i = 1; ; $i++) {
 	threads_data($report_file);
 	sleep(3);
 }
-
+}
 
 ?>
 
