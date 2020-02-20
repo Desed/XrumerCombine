@@ -12,7 +12,7 @@ $mysql_conf = array
 
 
 $debug = false;
-$url_success = 'http://login.wowcrazy.ru:81/Success.txt';
+$url_success = 'E:\Xrumer\Xrum19\Logs\pbn_sites\Posting.2020.01\Success.txt'; //путь к отчету успешные
 // Основные параметры
 $password = 'password124'; //ваш пароль от зареганых акков в проекте
 $xrumer_report = './success.txt'; // Указываем путь фаила "Успешные" от Xrumer
