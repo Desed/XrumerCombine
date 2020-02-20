@@ -125,4 +125,13 @@
 			unlink($file);
 		}
 	}
+	
+	function report_UrlSaveFile() {
+		global $url_success, $xrumer_report;
+		$xrumer_url_success = file_get_contents($url_success);
+		file_put_contents($xrumer_report, $xrumer_url_success);
+	
+	}
+	
+	
 ?>
