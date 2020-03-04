@@ -71,7 +71,7 @@ function collection_html($html, $url) {
 
 
 function link_processing($html, $url) {
-	global $debug;
+	global $debug, $ya_x;
 	$hrefsRel = extract_hrefsRel($html, $url); // получаем массив с атрибутами ссылок
 		$rel_type = sorting_hrefArr_follow($hrefsRel);
 		
@@ -97,7 +97,9 @@ function link_processing($html, $url) {
 			print_r($global_array);
 		} else {
 			mysql_update_processing_data($global_array);
-			mysql_update_yaX();
+			if ($ya_x) {
+				mysql_update_yaX();
+			}
 		}
 			
 
