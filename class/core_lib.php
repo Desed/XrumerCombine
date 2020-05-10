@@ -337,8 +337,8 @@ $time = microtime(true) - $start;
 }
 
 if ($debug) {
-	threads_data(array(array('url' => 'http://mrez.ru/testtitle.html')));;
-} else {
+	threads_data(array(array('url' => '')));;
+} elseif($online_mode) {
 for ($i = 1; ; $i++) {
 	report_UrlSaveFile();
 	$report_file = xrumer_report_processing();
@@ -352,7 +352,13 @@ for ($i = 1; ; $i++) {
 	threads_data($report_file);
 	sleep(3);
 }
+} elseif ($single_mode) {
+	$rep = read_file2($xrumer_report, $password);
+	threads_data($rep);
+	mysql_trash_badLinks();
 }
+
+
 
 ?>
 
