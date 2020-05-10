@@ -12,6 +12,8 @@ $mysql_conf = array
 
 
 $debug = false;
+$online_mode = false;
+$single_mode = true;
 $url_success = 'E:\Xrumer\Xrum19\Logs\pbn_sites\Posting.2020.01\Success.txt'; //путь к отчету успешные
 // Основные параметры
 $password = 'password124'; //ваш пароль от зареганых акков в проекте
